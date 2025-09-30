@@ -27,7 +27,6 @@ const equipoSchema = new Schema({
     ip: { 
         type: String, 
     
-        sparse: true 
     },
     // Relación a Unidad
     nombre_unidad: { 
@@ -45,14 +44,17 @@ const equipoSchema = new Schema({
     // --- Campos Específicos de PC (Solo se llenan si tipo_activo='PC') ---
     nombre_equipo: { 
         type: String, 
-        unique: true, 
-        sparse: true
+       
+        
     },
     usuario: { 
         type: String 
     },
     ver_win: { 
         type: String // Versión de Windows
+    },
+    windows: {
+        type: String
     },
     antivirus: { 
         type: String
@@ -61,10 +63,10 @@ const equipoSchema = new Schema({
         type: String
     },
     ram: {
-        type: String
+        type: Number
     },
     almacenamiento: {
-        type: String
+        type: Number
     },
 
 
