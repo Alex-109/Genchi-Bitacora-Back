@@ -47,6 +47,15 @@ const getAllEquipos = async (req, res) => {
 const createEquipo = async (req, res, tipo) => {
     const data = { ...req.body, tipo_equipo: tipo };
 
+    // **NUEVA LÓGICA DE LIMPIEZA DE NULLS**
+    Object.keys(data).forEach(key => {
+        // Si el valor es null, undefined o una cadena vacía, lo eliminamos.
+        if (data[key] === null || data[key] === undefined || data[key] === "") {
+            delete data[key];
+        }
+    });
+
+
     // Limpieza de datos (para no guardar campos de PC en Impresoras y viceversa)
     if (tipo === 'PC') {
         delete data.toner;
