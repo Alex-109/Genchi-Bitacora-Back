@@ -7,6 +7,10 @@ const reparacionesSchema = new Schema({
         required: true, 
         unique: true // varchar -> String
     },
+    id_equipo: {
+        type: Number,
+    
+     },
     obs: { 
         type: String // text -> String (Observaciones)
     },
@@ -15,13 +19,16 @@ const reparacionesSchema = new Schema({
     serie: { 
         type: String, 
         ref: 'Equipo', 
-        required: true 
     },
     
     // Relación al Técnico que hizo la reparación (Foreign Key)
     rut: { 
         type: String, 
         ref: 'Tecnico', 
+    },
+    // Cambios realizados (antes y después)
+    cambios: { 
+        type: Object, 
         required: true 
     },
     
@@ -31,6 +38,7 @@ const reparacionesSchema = new Schema({
         ref: 'Acta' 
         // No es required si la reparación puede existir sin estar en un acta todavía.
     },
+
 }, { timestamps: true });
 
 const Reparaciones = model('Reparaciones', reparacionesSchema);

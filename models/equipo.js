@@ -7,12 +7,10 @@ const equipoSchema = new Schema({
     //id
     id: { 
         type: Number,
+        unique: true
        
     },
-    serie: { 
-        type: String,  
-        
-    },
+  
     modelo: { 
         type: String, 
          
@@ -22,12 +20,23 @@ const equipoSchema = new Schema({
         
     },
     num_inv: { 
-        type: String 
+        type: String ,
+          unique: true,   // si quieres que las series no se repitan
+          sparse: true  
     },
+
+    serie: { 
+    type: String,  
+    unique: true,   // si quieres que las series no se repitan
+    sparse: true    // permite que haya documentos sin valor en serie
+    },
+
     ip: { 
-        type: String, 
-    
+    type: String, 
+    unique: true,   // si quieres que las IPs no se repitan
+    sparse: true    // permite que haya documentos sin valor en ip
     },
+
     // Relación a Unidad
     nombre_unidad: { 
         type: String,

@@ -4,6 +4,7 @@ const dotenv = require('dotenv');
 const conectarMongo = require('./config/config');
 const unidadRoutes = require('./routes/unidadRoute');
 const equipoRoutes = require('./routes/equipoRoute');
+const reparacionesRoutes = require('./routes/reparacion');
 const cors = require('cors'); // 📌 Importar CORS
 
 dotenv.config();
@@ -27,6 +28,10 @@ conectarMongo(); // Llamar conexión a MongoDB
 // Rutas
 app.use('/api/unidades', unidadRoutes);
 app.use('/api/equipos', equipoRoutes);
+app.use('/api/reparaciones', reparacionesRoutes);
+
+
+
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
