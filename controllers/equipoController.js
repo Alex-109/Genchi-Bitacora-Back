@@ -42,8 +42,9 @@ const buscarEquipos = async (req, res) => {
 };
 
 // 🆕 Crear nuevo equipo
+// 🆕 Crear nuevo equipo
 const crearEquipo = async (req, res) => {
-  const { ip, serie, num_inv, nombre_equipo } = req.body;
+  let { ip, serie, num_inv, nombre_equipo } = req.body;
   const errores = [];
 
   // --- Validar formato de IP (IPv4 simple) ---
@@ -79,8 +80,17 @@ const crearEquipo = async (req, res) => {
       return res.status(400).json({ mensaje });
     }
 
-    // --- Si todo está bien, crear el nuevo equipo ---
-    const nuevo = new Equipo(req.body);
+    // --- Convertir cadenas vacías a null antes de guardar ---
+    const limpiarCampo = (valor) => (valor === '' ? null : valor);
+
+    const nuevo = new Equipo({
+      ...req.body,
+      serie: limpiarCampo(serie),
+      num_inv: limpiarCampo(num_inv),
+      ip: limpiarCampo(ip),
+      nombre_equipo: limpiarCampo(nombre_equipo)
+    });
+
     await nuevo.save();
 
     res.status(201).json({ mensaje: 'Equipo creado correctamente.' });
@@ -90,6 +100,7 @@ const crearEquipo = async (req, res) => {
     return res.status(500).json({ mensaje: 'Error al crear el equipo.', detalle: err.message });
   }
 };
+
 
 
 // ✏️ Actualizar equipo por ID
