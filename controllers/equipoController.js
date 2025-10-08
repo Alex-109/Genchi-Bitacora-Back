@@ -43,7 +43,7 @@ const buscarEquipos = async (req, res) => {
 
 // 🆕 Crear nuevo equipo
 const crearEquipo = async (req, res) => {
-  const { ip, serie, num_inv, nombre_equipo} = req.body;
+  const { ip, serie, num_inv, nombre_equipo } = req.body;
   const errores = [];
 
   // --- Validar formato de IP (IPv4 simple) ---
@@ -57,23 +57,25 @@ const crearEquipo = async (req, res) => {
   }
 
   try {
-    // --- Verificar duplicados manualmente ---
-    const duplicado = await Equipo.findOne({
-      $or: [
-        { serie: serie },
-        { num_inv: num_inv },
-        { ip: ip },
-        { nombre_equipo: nombre_equipo}
-      ]
-    });
+    // --- Construir condiciones solo con valores no vacíos ---
+    const condiciones = [];
+    if (serie != null && serie !== '') condiciones.push({ serie });
+    if (num_inv != null && num_inv !== '') condiciones.push({ num_inv });
+    if (ip != null && ip !== '') condiciones.push({ ip });
+    if (nombre_equipo != null && nombre_equipo !== '') condiciones.push({ nombre_equipo });
+
+    // --- Buscar duplicados solo si hay campos a revisar ---
+    let duplicado = null;
+    if (condiciones.length > 0) {
+      duplicado = await Equipo.findOne({ $or: condiciones });
+    }
 
     if (duplicado) {
-      // Detectar cuál campo está duplicado
       let mensaje = 'Ya existe un equipo con ';
-      if (duplicado.serie === serie) mensaje += 'esa serie.';
-      else if (duplicado.num_inv === num_inv) mensaje += 'ese número de inventario.';
-      else if (duplicado.ip === ip) mensaje += 'esa dirección IP.';
-      else if (duplicado.nombre_equipo === nombre_equipo) mensaje += 'ese nombre de equipo.';
+      if (serie && duplicado.serie === serie) mensaje += 'esa serie.';
+      else if (num_inv && duplicado.num_inv === num_inv) mensaje += 'ese número de inventario.';
+      else if (ip && duplicado.ip === ip) mensaje += 'esa dirección IP.';
+      else if (nombre_equipo && duplicado.nombre_equipo === nombre_equipo) mensaje += 'ese nombre de equipo.';
       return res.status(400).json({ mensaje });
     }
 
@@ -84,10 +86,9 @@ const crearEquipo = async (req, res) => {
     res.status(201).json({ mensaje: 'Equipo creado correctamente.' });
 
   } catch (err) {
-  console.error('❌ Error al guardar el equipo:', err);
-  return res.status(500).json({ mensaje: 'Error al crear el equipo.', detalle: err.message });
-}
-
+    console.error('❌ Error al guardar el equipo:', err);
+    return res.status(500).json({ mensaje: 'Error al crear el equipo.', detalle: err.message });
+  }
 };
 
 
