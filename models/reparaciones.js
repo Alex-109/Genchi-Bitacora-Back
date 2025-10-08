@@ -1,11 +1,12 @@
 const { Schema, model } = require('mongoose');
+const autoIncrement = require('mongoose-sequence')(require('mongoose'));
 
 const reparacionesSchema = new Schema({
     // Clave primaria lógica
     id_repa: { 
-        type: String, 
-        required: true, 
-        unique: true // varchar -> String
+        type: Number,
+        unique: true
+
     },
     id_equipo: {
         type: Number,
@@ -15,11 +16,6 @@ const reparacionesSchema = new Schema({
         type: String // text -> String (Observaciones)
     },
     
-    // Relación al Equipo reparado (Foreign Key)
-    serie: { 
-        type: String, 
-        ref: 'Equipo', 
-    },
     
     // Relación al Técnico que hizo la reparación (Foreign Key)
     rut: { 
@@ -31,16 +27,16 @@ const reparacionesSchema = new Schema({
         type: Object, 
         required: true 
     },
+    fecha: {
+        type: Date,
+        default: Date.now
+    }
     
-    // Relación al Acta donde se registra la reparación (Foreign Key, asumiendo 1:N)
-    id_acta: { 
-        type: String, 
-        ref: 'Acta' 
-        // No es required si la reparación puede existir sin estar en un acta todavía.
-    },
 
 }, { timestamps: true });
 
-const Reparaciones = model('Reparaciones', reparacionesSchema);
+reparacionesSchema.plugin(autoIncrement, { inc_field: 'id_repa' });
+const Reparaciones = model('Reparaciones', reparacionesSchema); // ✅ después del plugin
+
 
 module.exports = Reparaciones;

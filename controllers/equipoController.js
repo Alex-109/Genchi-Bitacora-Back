@@ -1,174 +1,142 @@
 const Equipo = require('../models/equipo');
-const mongoose = require('mongoose'); // Necesario para la validación de ObjectId
+const mongoose = require('mongoose');
 
-// Obtener un equipo por su ID
-const getEquipoById = async (req, res) => {
-    try {
-        const rawId = req.params.id;
-        
-        // 1. Intentar buscar por _id de MongoDB (el ID largo, preferido por la API)
-        let equipo;
-        if (mongoose.Types.ObjectId.isValid(rawId)) {
-            equipo = await Equipo.findById(rawId);
-        }
+// 🔍 Buscar equipos con filtros y búsqueda general
+const buscarEquipos = async (req, res) => {
+  const {
+    marca,
+    tipo_equipo,
+    nombre_unidad,
+    cpu,
+    ram,
+    almacenamiento,
+    tipo_almacenamiento,
+    query
+  } = req.body;
 
-        // 2. Si no se encontró o no era ObjectId, intentar buscar por el ID autoincrementable 'id'
-        if (!equipo) {
-             const idValue = (!isNaN(rawId) && Number.isInteger(Number(rawId))) ? Number(rawId) : rawId;
-             equipo = await Equipo.findOne({ id: idValue });
-        }
+  const filtros = {};
 
-        if (!equipo) {
-            return res.status(404).json({ message: 'Equipo no encontrado.' });
-        }
-        return res.status(200).json(equipo);
-    } catch (error) {
-        return res.status(500).json({
-            message: 'Error al buscar el equipo',
-            error: error.message
-        });
-    }
+  if (marca) filtros.marca = {$regex: marca, $options: 'i' };
+  if (tipo_equipo) filtros.tipo_equipo = {$regex: tipo_equipo, $options: 'i' };
+  if (nombre_unidad) filtros.nombre_unidad = {$regex: nombre_unidad, $options: 'i' };
+  if (cpu) filtros.cpu = {$regex: cpu, $options: 'i' };
+  if (ram) filtros.ram = ram;
+  if (almacenamiento) filtros.almacenamiento = almacenamiento;
+  if (tipo_almacenamiento) filtros.tipo_almacenamiento = {$regex: tipo_almacenamiento, $options: 'i' };
+
+  if (query) {
+    filtros.$or = [
+      { nombre_equipo: { $regex: query, $options: 'i' } },
+      { ip: { $regex: query, $options: 'i' } },
+      { serie: { $regex: query, $options: 'i' } },
+      { num_inv: { $regex: query, $options: 'i' } }
+    ];
+  }
+
+  try {
+    const equipos = await Equipo.find(filtros);
+    res.json(equipos);
+  } catch (err) {
+    res.status(500).json({ error: 'Error al buscar equipos' });
+  }
 };
 
-// Obtener todos los equipos
-const getAllEquipos = async (req, res) => {
-    try {
-        const equipos = await Equipo.find().lean();
-        return res.status(200).json(Array.isArray(equipos) ? equipos : []);
-    } catch (error) {
-        return res.status(500).json({
-            message: 'Error al obtener los equipos',
-            error: error.message
-        });
-    }
-};
+// 🆕 Crear nuevo equipo
+const crearEquipo = async (req, res) => {
+  const { ip, serie, num_inv, nombre_equipo} = req.body;
+  const errores = [];
 
-// Crear equipo (PC o Impresora)
-const createEquipo = async (req, res, tipo) => {
-    const data = { ...req.body, tipo_equipo: tipo };
+  // --- Validar formato de IP (IPv4 simple) ---
+  const ipRegex = /^(?!.*\.\.)(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
+  if (ip && !ipRegex.test(ip)) {
+    errores.push('Formato de IP inválido.');
+  }
 
-    // **NUEVA LÓGICA DE LIMPIEZA DE NULLS**
-    Object.keys(data).forEach(key => {
-        // Si el valor es null, undefined o una cadena vacía, lo eliminamos.
-        if (data[key] === null || data[key] === undefined || data[key] === "") {
-            delete data[key];
-        }
+  if (errores.length > 0) {
+    return res.status(400).json({ errores });
+  }
+
+  try {
+    // --- Verificar duplicados manualmente ---
+    const duplicado = await Equipo.findOne({
+      $or: [
+        { serie: serie },
+        { num_inv: num_inv },
+        { ip: ip },
+        { nombre_equipo: nombre_equipo}
+      ]
     });
 
-
-    // Limpieza de datos (para no guardar campos de PC en Impresoras y viceversa)
-    if (tipo === 'PC') {
-        delete data.toner;
-        delete data.drum;
-        delete data.conexion;
-        delete data.printerType;
-        delete data.color;
-        delete data.duplex;
-        delete data.networked;
-    } else if (tipo === 'Impresora') {
-        delete data.nombre_equipo;
-        delete data.usuario;
-        delete data.ver_win;
-        delete data.windows;
-        delete data.antivirus;
-        delete data.cpu;
-        delete data.ram;
-        delete data.almacenamiento;
-        delete data.motherboard;
+    if (duplicado) {
+      // Detectar cuál campo está duplicado
+      let mensaje = 'Ya existe un equipo con ';
+      if (duplicado.serie === serie) mensaje += 'esa serie.';
+      else if (duplicado.num_inv === num_inv) mensaje += 'ese número de inventario.';
+      else if (duplicado.ip === ip) mensaje += 'esa dirección IP.';
+      else if (duplicado.nombre_equipo === nombre_equipo) mensaje += 'ese nombre de equipo.';
+      return res.status(400).json({ mensaje });
     }
 
-    try {
-        const nuevoEquipo = new Equipo(data);
-        await nuevoEquipo.save();
-        return res.status(201).json(nuevoEquipo);
-    } catch (error) {
-        if (error.code === 11000) {
-            return res.status(409).json({ message: 'Error de duplicidad: La serie o IP ya existe.' });
-        }
-        return res.status(500).json({
-            message: `Error al crear el equipo de tipo ${tipo}`,
-            error: error.message
-        });
-    }
-};
+    // --- Si todo está bien, crear el nuevo equipo ---
+    const nuevo = new Equipo(req.body);
+    await nuevo.save();
 
-// Controladores específicos
-const createPC = (req, res) => createEquipo(req, res, 'PC');
-const createImpresora = (req, res) => createEquipo(req, res, 'Impresora');
+    res.status(201).json({ mensaje: 'Equipo creado correctamente.' });
 
+  } catch (err) {
+  console.error('❌ Error al guardar el equipo:', err);
+  return res.status(500).json({ mensaje: 'Error al crear el equipo.', detalle: err.message });
+}
 
-// Buscar equipos por texto
-const searchEquipos = async (req, res) => {
-    const { q } = req.query;
-    if (!q) return res.status(400).json({ message: 'Falta el parámetro de búsqueda.' });
-
-    let equipos = [];
-    try {
-        // Si q es un número entero, busca solo por id
-        if (!isNaN(q) && Number.isInteger(Number(q))) {
-            equipos = await Equipo.find({ id: Number(q) }).lean();
-        } else {
-            // Si es texto, busca por los otros campos
-            // Utilizamos $or para combinar búsquedas por campos de texto
-            equipos = await Equipo.find({
-                $or: [
-                    { serie: { $regex: q, $options: 'i' } },
-                    { nombre_equipo: { $regex: q, $options: 'i' } },
-                    { usuario: { $regex: q, $options: 'i' } },
-                    { ip: { $regex: q, $options: 'i' } }
-                ]
-            }).lean();
-        }
-        return res.status(200).json(equipos);
-    } catch (error) {
-        return res.status(500).json({
-            message: 'Error en la búsqueda',
-            error: error.message
-        });
-    }
 };
 
 
-// Eliminar equipo por su ID (_id de MongoDB o 'id' autoincrementable)
-const deleteEquipoById = async (req, res) => {
-    try {
-        const rawId = req.params.id;
+// ✏️ Actualizar equipo por ID
+const actualizarEquipo = async (req, res) => {
+  const { id, changes } = req.body;
+  try {
+    await Equipo.findByIdAndUpdate(id, changes);
+    res.json({ mensaje: 'Equipo actualizado' });
+  } catch (err) {
+    res.status(500).json({ error: 'Error al actualizar equipo' });
+  }
+};
 
-        let equipoEliminado = null;
-        
-        // 1. Intentar eliminar por _id de MongoDB (si el ID es una cadena larga de 24 caracteres)
-        if (mongoose.Types.ObjectId.isValid(rawId)) {
-            equipoEliminado = await Equipo.findByIdAndDelete(rawId);
-        }
+// ❌ Eliminar equipo por ID autoincrementable
 
-        // 2. Si no se eliminó por _id, intentar eliminar por el ID autoincrementable 'id'
-        if (!equipoEliminado) {
-            const idValue = (!isNaN(rawId) && Number.isInteger(Number(rawId))) ? Number(rawId) : rawId;
-            equipoEliminado = await Equipo.findOneAndDelete({ id: idValue });
-        }
+const eliminarEquipo = async (req, res) => {
+  try {
+    const rawId = req.params.id;
 
-
-        if (!equipoEliminado) {
-            // 404 si Mongoose no encuentra el documento con el ID proporcionado
-            return res.status(404).json({ message: 'Equipo no encontrado para eliminar.' });
-        }
-        // Éxito
-        return res.status(200).json({ message: `Equipo (ID: ${equipoEliminado.id || equipoEliminado._id}) eliminado correctamente.` });
-    } catch (error) {
-        // 500 para errores de servidor o base de datos
-        return res.status(500).json({
-            message: 'Error al eliminar el equipo',
-            error: error.message
-        });
+    // Validar que sea un número entero
+    const idValue = Number(rawId);
+    if (isNaN(idValue) || !Number.isInteger(idValue)) {
+      return res.status(400).json({ message: 'ID inválido. Debe ser un número entero.' });
     }
+
+    // Buscar y eliminar por campo "id"
+    const equipoEliminado = await Equipo.findOneAndDelete({ id: idValue });
+
+    if (!equipoEliminado) {
+      return res.status(404).json({ message: `No se encontró ningún equipo con ID ${idValue}.` });
+    }
+
+    return res.status(200).json({
+      message: `Equipo con ID ${idValue} eliminado correctamente.`,
+      equipo: equipoEliminado
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: 'Error al eliminar el equipo.',
+      error: error.message
+    });
+  }
 };
 
 
 module.exports = {
-    createPC,
-    createImpresora,
-    getAllEquipos,
-    getEquipoById,
-    searchEquipos,
-    deleteEquipoById
+  buscarEquipos,
+  crearEquipo,
+  actualizarEquipo,
+  eliminarEquipo
 };

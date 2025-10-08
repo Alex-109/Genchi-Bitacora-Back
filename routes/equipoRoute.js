@@ -4,17 +4,11 @@ const router = express.Router();
 const equipoController = require('../controllers/equipoController');
 
 
-// Usamos el wrapper EXPORTADO createPC
-router.post('/pc', equipoController.createPC); 
-
-// Usamos el wrapper EXPORTADO createImpresora
-router.post('/impresora', equipoController.createImpresora);
-
-// Las demás rutas quedan bien
-router.get('/search', equipoController.searchEquipos);
-router.get('/:id', equipoController.getEquipoById);
-router.get('/', equipoController.getAllEquipos);
-router.delete('/:id', equipoController.deleteEquipoById);
+// Rutas para equipos
+router.post('/buscar', equipoController.buscarEquipos);
+router.post('/crear', equipoController.crearEquipo);
+router.put('/actualizar', equipoController.actualizarEquipo);
+router.delete('/eliminar/:id', equipoController.eliminarEquipo);
 
 
 module.exports = router;

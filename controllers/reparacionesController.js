@@ -29,7 +29,6 @@ const iniciarReparacion = async (req, res) => {
     await equipo.save();
 
     const nuevaRepa = new Reparaciones({
-      id_repa: `REPA-${Date.now()}`,
       id_equipo: equipo.id,
       rut,
       obs,
@@ -60,3 +59,4 @@ module.exports = {
   iniciarReparacion,
   getReparacionesByIdEquipo
 };
+

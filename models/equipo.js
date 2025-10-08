@@ -53,6 +53,8 @@ const equipoSchema = new Schema({
     // --- Campos Específicos de PC (Solo se llenan si tipo_activo='PC') ---
     nombre_equipo: { 
         type: String, 
+        unique: true,   // si quieres que los nombres de equipo no se repitan
+        sparse: true    // permite que haya documentos sin valor en nombre_equipo
        
         
     },
@@ -72,10 +74,13 @@ const equipoSchema = new Schema({
         type: String
     },
     ram: {
-        type: Number
+        type: String
     },
     almacenamiento: {
-        type: Number
+        type: String
+    },
+    tipo_almacenamiento: {
+        type: String
     },
 
 
