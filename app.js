@@ -24,11 +24,11 @@ app.use(express.json());
 
 conectarMongo(); // Conexión a MongoDB
 
-// --- Sincronizar índices de Equipo para unique + sparse ---
-const Equipo = require('./models/equipo');
-Equipo.syncIndexes()
-  .then(() => console.log('✅ Índices de Equipo sincronizados'))
-  .catch(err => console.error('❌ Error sincronizando índices de Equipo:', err));
+// 🔹 Ya no sincronizamos índices automáticamente
+// const Equipo = require('./models/equipo');
+// Equipo.syncIndexes()
+//   .then(() => console.log('✅ Índices de Equipo sincronizados'))
+//   .catch(err => console.error('❌ Error sincronizando índices de Equipo:', err));
 
 // Rutas
 app.use('/api/unidades', unidadRoutes);

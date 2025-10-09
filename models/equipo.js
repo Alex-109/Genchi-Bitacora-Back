@@ -44,11 +44,18 @@ const equipoSchema = new Schema({
         
     },
 
+
     // --- Campo para diferenciar el tipo de equipo (CLAVE) ---
+   
+    // ... otros campos
     tipo_equipo: {
         type: String,
-        
+        enum: ['pc', 'impresora'], // Valores permitidos en minúsculas
+        required: [true, 'El tipo de equipo es obligatorio.'],
+        lowercase: true, // <-- ¡CLAVE! Fuerza a minúsculas antes de guardar
+        trim: true
     },
+    // ... otros campos
 
     // --- Campos Específicos de PC (Solo se llenan si tipo_activo='PC') ---
     nombre_equipo: { 
@@ -95,9 +102,10 @@ const equipoSchema = new Schema({
     conexion: { 
         type: String 
     },
+    //timestamps
+   
     
-});
-
+}, { timestamps: true }); 
 // Configuración del plugin de auto-incremento para el campo 'id'
 equipoSchema.plugin(AutoIncrement, { inc_field: 'id', id: 'equipo_id_counter' }); 
 

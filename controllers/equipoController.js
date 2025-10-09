@@ -1,50 +1,142 @@
 const Equipo = require('../models/equipo');
 const mongoose = require('mongoose');
+const Reparaciones = require('../models/reparaciones');
 
-// 🔍 Buscar equipos con filtros y búsqueda general
+// Función auxiliar para crear un patrón de RegEx que ignora espacios (flexible).
+// Esto permite que '8 GB' (filtro) encuentre '8gb' (DB).
+
+/* =========================================================================
+   Función auxiliar: Crear patrón flexible para búsqueda difusa
+   - Ignora mayúsculas/minúsculas
+   - Ignora espacios y acentos
+   - Permite coincidencias aproximadas (ej: 'i5' encuentra 'i5 8400')
+   ========================================================================= */
+function createFlexiblePattern(input) {
+  if (!input) return /.*/;
+  const clean = input
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '');
+  const pattern = clean.split('').join('\\s*'); // permite espacios intermedios
+  return new RegExp(pattern, 'i');
+}
+
+/* =========================================================================
+   1️⃣  API: Obtener los últimos equipos ingresados
+   - Método: GET
+   - Query params: limit (opcional, default 10)
+   ========================================================================= */
+const obtenerUltimosEquipos = async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+
+    const equipos = await Equipo.find()
+      .sort({ createdAt: -1 }) // más recientes primero
+      .limit(limit);
+
+    res.json(equipos);
+  } catch (error) {
+    console.error('Error al obtener los últimos equipos:', error);
+    res.status(500).json({ error: 'Error al obtener los últimos equipos' });
+  }
+};
+
+/* =========================================================================
+   2️⃣  API: Buscar equipos con filtros y búsqueda general
+   - Método: POST
+   - Body: 
+     {
+       tipo_equipo, marca, nombre_unidad, cpu, ram, almacenamiento,
+       tipo_almacenamiento, query, limit, pagina
+     }
+   ========================================================================= */
 const buscarEquipos = async (req, res) => {
   const {
-    marca,
     tipo_equipo,
+    marca,
     nombre_unidad,
     cpu,
     ram,
     almacenamiento,
     tipo_almacenamiento,
-    query
+    query,
+    fecha,
+    limit = 10,
+    pagina = 1
   } = req.body;
 
   const filtros = {};
-
-  if (marca) filtros.marca = {$regex: marca, $options: 'i' };
-  if (tipo_equipo) filtros.tipo_equipo = {$regex: tipo_equipo, $options: 'i' };
-  if (nombre_unidad) filtros.nombre_unidad = {$regex: nombre_unidad, $options: 'i' };
-  if (cpu) filtros.cpu = {$regex: cpu, $options: 'i' };
-  if (ram) filtros.ram = ram;
-  if (almacenamiento) filtros.almacenamiento = almacenamiento;
-  if (tipo_almacenamiento) filtros.tipo_almacenamiento = {$regex: tipo_almacenamiento, $options: 'i' };
-
-  if (query) {
-    filtros.$or = [
-      { nombre_equipo: { $regex: query, $options: 'i' } },
-      { ip: { $regex: query, $options: 'i' } },
-      { serie: { $regex: query, $options: 'i' } },
-      { num_inv: { $regex: query, $options: 'i' } }
-    ];
-  }
+  const skip = (pagina - 1) * limit;
 
   try {
-    const equipos = await Equipo.find(filtros);
-    res.json(equipos);
+    // 🔹 1. Filtro por tipo de equipo
+    if (tipo_equipo && tipo_equipo !== 'todos') {
+      filtros.tipo_equipo = tipo_equipo.toLowerCase().trim();
+    }
+
+    // 🔹 2. Filtros aproximados
+    if (marca) filtros.marca = { $regex: createFlexiblePattern(marca) };
+    if (nombre_unidad) filtros.nombre_unidad = { $regex: createFlexiblePattern(nombre_unidad) };
+    if (cpu) filtros.cpu = { $regex: createFlexiblePattern(cpu) };
+
+    // 2.5 filtros exactos
+    if (ram) filtros.ram = ram;
+    if (almacenamiento) {
+      if (almacenamiento === "Otros") {
+        filtros.almacenamiento = { $nin: ["250","256","500","512","1000"] };
+      } else {
+        filtros.almacenamiento = almacenamiento;
+      }
+    }
+    if (tipo_almacenamiento) filtros.tipo_almacenamiento = { $regex: createFlexiblePattern(tipo_almacenamiento) };
+
+    // 🔹 3. Búsqueda general
+    if (query) {
+      const flexible = createFlexiblePattern(query);
+      filtros.$or = [
+        { nombre_equipo: { $regex: flexible } },
+        { ip: { $regex: flexible } },
+        { serie: { $regex: flexible } },
+        { num_inv: { $regex: flexible } }
+      ];
+    }
+
+    // 🔹 4. Filtro por fecha (equipos creados o reparaciones ese día)
+    if (fecha) {
+      // 🔹 Convertimos la fecha para evitar desfases de zona horaria
+      const inicio = new Date(fecha + "T00:00:00");
+      const fin = new Date(fecha + "T23:59:59.999");
+
+      // Buscamos IDs de reparaciones de ese día
+      const reparacionesIds = await Reparaciones.find({
+        createdAt: { $gte: inicio, $lte: fin }
+      }).distinct('id_equipo');
+
+      filtros.$or = [
+        { createdAt: { $gte: inicio, $lte: fin } },          // equipos creados ese día
+        { id: { $in: reparacionesIds } }                    // equipos con reparaciones ese día
+      ];
+    }
+
+    // 🔹 5. Conteo total y consulta paginada
+    const total = await Equipo.countDocuments(filtros);
+    const equipos = await Equipo.find(filtros)
+      .sort({ updatedAt: -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    res.json({ total, equipos, paginaActual: pagina, totalPaginas: Math.ceil(total / limit) });
   } catch (err) {
+    console.error('Error al buscar equipos:', err);
     res.status(500).json({ error: 'Error al buscar equipos' });
   }
 };
 
-// 🆕 Crear nuevo equipo
+
 // 🆕 Crear nuevo equipo
 const crearEquipo = async (req, res) => {
-  let { ip, serie, num_inv, nombre_equipo } = req.body;
+  let { ip, serie, num_inv, nombre_equipo, almacenamiento } = req.body;
   const errores = [];
 
   // --- Validar formato de IP (IPv4 simple) ---
@@ -58,6 +150,11 @@ const crearEquipo = async (req, res) => {
   }
 
   try {
+    // --- Transformar almacenamiento si es número ---
+    if (typeof almacenamiento === 'number') {
+      req.body.almacenamiento = `${almacenamiento} GB`;
+    }
+
     // --- Construir condiciones solo con valores no vacíos ---
     const condiciones = [];
     if (serie != null && serie !== '') condiciones.push({ serie });
@@ -102,53 +199,62 @@ const crearEquipo = async (req, res) => {
 };
 
 
-
 // ✏️ Actualizar equipo por ID
 const actualizarEquipo = async (req, res) => {
   const { id, changes } = req.body;
+
   try {
+    // 🔁 Transformar almacenamiento si viene como número
+    if (typeof changes.almacenamiento === 'number') {
+      changes.almacenamiento = `${changes.almacenamiento} GB`;
+    }
+
     await Equipo.findByIdAndUpdate(id, changes);
     res.json({ mensaje: 'Equipo actualizado' });
   } catch (err) {
+    console.error('❌ Error al actualizar equipo:', err);
     res.status(500).json({ error: 'Error al actualizar equipo' });
   }
 };
 
+
 // ❌ Eliminar equipo por ID autoincrementable
 
 const eliminarEquipo = async (req, res) => {
-  try {
-    const rawId = req.params.id;
+  try {
+    const rawId = req.params.id;
 
-    // Validar que sea un número entero
-    const idValue = Number(rawId);
-    if (isNaN(idValue) || !Number.isInteger(idValue)) {
-      return res.status(400).json({ message: 'ID inválido. Debe ser un número entero.' });
-    }
+    // Validar que sea un número entero
+    const idValue = Number(rawId);
+    if (isNaN(idValue) || !Number.isInteger(idValue)) {
+      return res.status(400).json({ message: 'ID inválido. Debe ser un número entero.' });
+    }
 
-    // Buscar y eliminar por campo "id"
-    const equipoEliminado = await Equipo.findOneAndDelete({ id: idValue });
+    // Buscar y eliminar por campo "id"
+    const equipoEliminado = await Equipo.findOneAndDelete({ id: idValue });
 
-    if (!equipoEliminado) {
-      return res.status(404).json({ message: `No se encontró ningún equipo con ID ${idValue}.` });
-    }
+    if (!equipoEliminado) {
+      return res.status(404).json({ message: `No se encontró ningún equipo con ID ${idValue}.` });
+    }
 
-    return res.status(200).json({
-      message: `Equipo con ID ${idValue} eliminado correctamente.`,
-      equipo: equipoEliminado
-    });
-  } catch (error) {
-    return res.status(500).json({
-      message: 'Error al eliminar el equipo.',
-      error: error.message
-    });
-  }
+    return res.status(200).json({
+      message: `Equipo con ID ${idValue} eliminado correctamente.`,
+      equipo: equipoEliminado
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: 'Error al eliminar el equipo.',
+      error: error.message
+    });
+  }
 };
 
 
 module.exports = {
-  buscarEquipos,
-  crearEquipo,
-  actualizarEquipo,
-  eliminarEquipo
+  buscarEquipos,
+  crearEquipo,
+  actualizarEquipo,
+  eliminarEquipo,
+  obtenerUltimosEquipos
+
 };
