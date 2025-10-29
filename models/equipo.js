@@ -1,115 +1,111 @@
-const mongoose = require('mongoose'); // Primero importa Mongoose completo
-const { Schema, model } = mongoose; // Luego desestructura (o usa require('mongoose') directamente)
-const AutoIncrement = require('mongoose-sequence')(mongoose); // Ahora sí se puede usar 'mongoose'
+const mongoose = require('mongoose');
+const { Schema, model } = mongoose;
+const AutoIncrement = require('mongoose-sequence')(mongoose);
+const Reparaciones = require('./reparaciones'); // 👈 Importamos el modelo hijo
 
 const equipoSchema = new Schema({
     // --- Campos de Identificación Base (Serie, Modelo, Ubicación) ---
-    //id
     id: { 
         type: Number,
         unique: true
-       
     },
-  
     modelo: { 
-        type: String, 
-         
+        type: String
     },
     marca: { 
-        type: String, 
-        
+        type: String
     },
     num_inv: { 
-        type: String ,
-          unique: true,   // si quieres que las series no se repitan
-          sparse: true  
+        type: String,
+        unique: true,
+        sparse: true
     },
-
     serie: { 
-    type: String,  
-    unique: true,   // si quieres que las series no se repitan
-    sparse: true    // permite que haya documentos sin valor en serie
+        type: String,
+        unique: true,
+        sparse: true
     },
-
     ip: { 
-    type: String, 
-    unique: true,   // si quieres que las IPs no se repitan
-    sparse: true    // permite que haya documentos sin valor en ip
+        type: String,
+        unique: true,
+        sparse: true
     },
 
     // Relación a Unidad
     nombre_unidad: { 
         type: String,
-        ref: 'Unidad', 
-        
+        ref: 'Unidad'
     },
 
+    comentarios: {
+        type: String
+    },
+    estado: {
+        type: String,
+        enum: ['en proceso de reparacion', 'en espera de repuesto','entregado'],
+    },
 
-    // --- Campo para diferenciar el tipo de equipo (CLAVE) ---
-   
-    // ... otros campos
+    // --- Campo clave para tipo de equipo ---
     tipo_equipo: {
         type: String,
-        enum: ['pc', 'impresora'], // Valores permitidos en minúsculas
+        enum: ['pc', 'impresora'],
         required: [true, 'El tipo de equipo es obligatorio.'],
-        lowercase: true, // <-- ¡CLAVE! Fuerza a minúsculas antes de guardar
+        lowercase: true,
         trim: true
     },
-    // ... otros campos
 
-    // --- Campos Específicos de PC (Solo se llenan si tipo_activo='PC') ---
+    // --- Campos específicos de PC ---
     nombre_equipo: { 
-        type: String, 
-        unique: true,   // si quieres que los nombres de equipo no se repitan
-        sparse: true    // permite que haya documentos sin valor en nombre_equipo
-       
-        
-    },
-    usuario: { 
-        type: String 
-    },
-    ver_win: { 
-        type: String // Versión de Windows
-    },
-    windows: {
-        type: String
-    },
-    antivirus: { 
-        type: String
-    },
-    cpu: {
-        type: String
-    },
-    ram: {
-        type: String
-    },
-    almacenamiento: {
-        type: String
-    },
-    tipo_almacenamiento: {
-        type: String
-    },
-
-
-    // --- Campos Específicos de Impresora (Solo se llenan si tipo_activo='Impresora') ---
-    toner: { 
         type: String,
-        // No es requerido globalmente, solo para Impresoras
-    }, 
-    drum: { 
-        type: String 
-    }, 
-    conexion: { 
-        type: String 
+        unique: true,
+        sparse: true
     },
-    //timestamps
-   
-    
-}, { timestamps: true }); 
-// Configuración del plugin de auto-incremento para el campo 'id'
-equipoSchema.plugin(AutoIncrement, { inc_field: 'id', id: 'equipo_id_counter' }); 
+    usuario: { type: String },
+    ver_win: { type: String },
+    windows: { type: String },
+    antivirus: { type: String },
+    cpu: { type: String },
+    ram: { type: String },
+    almacenamiento: { type: String },
+    tipo_almacenamiento: { type: String },
+    historial_ingresos: [
+    {
+      fecha: { type: Date, required: true },
+    }
+    ],
 
+    // --- Campos específicos de Impresora ---
+    toner: { type: String },
+    drum: { type: String },
+    conexion: { type: String }
 
-// Usamos 'equipos' como colección singular para todo el inventario
-const Equipo = model('Equipo', equipoSchema, 'equipos'); 
+}, { timestamps: true });
+
+// 🔢 Plugin de autoincremento
+equipoSchema.plugin(AutoIncrement, { inc_field: 'id', id: 'equipo_id_counter' });
+
+/* 
+-------------------------------------------------------
+🧩 Eliminación en cascada de reparaciones asociadas
+-------------------------------------------------------
+- Este middleware se ejecuta automáticamente ANTES
+  de eliminar un equipo con `findOneAndDelete`.
+- Evita dejar reparaciones huérfanas en la base de datos.
+*/
+equipoSchema.pre('findOneAndDelete', async function (next) {
+    try {
+        const filtro = this.getFilter();
+        const equipo = await this.model.findOne(filtro);
+        if (equipo) {
+            await Reparaciones.deleteMany({ id_equipo: equipo.id });
+            console.log(`🧹 Reparaciones asociadas al equipo ${equipo.id} eliminadas correctamente.`);
+        }
+        next();
+    } catch (err) {
+        console.error('Error en eliminación en cascada:', err);
+        next(err);
+    }
+});
+
+const Equipo = model('Equipo', equipoSchema, 'equipos');
 module.exports = Equipo;

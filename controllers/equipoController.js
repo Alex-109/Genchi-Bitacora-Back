@@ -48,7 +48,7 @@ const obtenerUltimosEquipos = async (req, res) => {
    - Body: 
      {
        tipo_equipo, marca, nombre_unidad, cpu, ram, almacenamiento,
-       tipo_almacenamiento, query, limit, pagina
+       tipo_almacenamiento, query, fechaInicio, fechaFin, limit, pagina
      }
    ========================================================================= */
 const buscarEquipos = async (req, res) => {
@@ -61,7 +61,8 @@ const buscarEquipos = async (req, res) => {
     almacenamiento,
     tipo_almacenamiento,
     query,
-    fecha,
+    fechaInicio,
+    fechaFin,
     limit = 10,
     pagina = 1
   } = req.body;
@@ -80,8 +81,9 @@ const buscarEquipos = async (req, res) => {
     if (nombre_unidad) filtros.nombre_unidad = { $regex: createFlexiblePattern(nombre_unidad) };
     if (cpu) filtros.cpu = { $regex: createFlexiblePattern(cpu) };
 
-    // 2.5 filtros exactos
+    // 🔹 2.5 Filtros exactos o personalizados
     if (ram) filtros.ram = ram;
+
     if (almacenamiento) {
       if (almacenamiento === "Otros") {
         filtros.almacenamiento = { $nin: ["250","256","500","512","1000"] };
@@ -89,7 +91,11 @@ const buscarEquipos = async (req, res) => {
         filtros.almacenamiento = almacenamiento;
       }
     }
-    if (tipo_almacenamiento) filtros.tipo_almacenamiento = { $regex: createFlexiblePattern(tipo_almacenamiento) };
+
+    // ✅ tipo_almacenamiento con patrón flexible
+    if (tipo_almacenamiento) {
+      filtros.tipo_almacenamiento = { $regex: createFlexiblePattern(tipo_almacenamiento) };
+    }
 
     // 🔹 3. Búsqueda general
     if (query) {
@@ -102,20 +108,23 @@ const buscarEquipos = async (req, res) => {
       ];
     }
 
-    // 🔹 4. Filtro por fecha (equipos creados o reparaciones ese día)
-    if (fecha) {
-      // 🔹 Convertimos la fecha para evitar desfases de zona horaria
-      const inicio = new Date(fecha + "T00:00:00");
-      const fin = new Date(fecha + "T23:59:59.999");
+    // 🔹 4. Filtro por rango de fechas (equipos o reparaciones en ese rango)
+    if (fechaInicio || fechaFin) {
+      const inicio = fechaInicio ? new Date(fechaInicio + "T00:00:00") : new Date("2000-01-01");
+      const fin = fechaFin ? new Date(fechaFin + "T23:59:59.999") : new Date();
 
-      // Buscamos IDs de reparaciones de ese día
+      // Buscar IDs de equipos con reparaciones en ese rango
       const reparacionesIds = await Reparaciones.find({
         createdAt: { $gte: inicio, $lte: fin }
-      }).distinct('id_equipo');
+      }).distinct("id_equipo");
+
+      // Si ya había un $or, combinamos
+      const existingOr = filtros.$or ? filtros.$or : [];
 
       filtros.$or = [
-        { createdAt: { $gte: inicio, $lte: fin } },          // equipos creados ese día
-        { id: { $in: reparacionesIds } }                    // equipos con reparaciones ese día
+        ...existingOr,
+        { createdAt: { $gte: inicio, $lte: fin } }, // equipos creados en el rango
+        { id: { $in: reparacionesIds } }            // o con reparaciones en el rango
       ];
     }
 
@@ -126,12 +135,19 @@ const buscarEquipos = async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-    res.json({ total, equipos, paginaActual: pagina, totalPaginas: Math.ceil(total / limit) });
+    res.json({
+      total,
+      equipos,
+      paginaActual: pagina,
+      totalPaginas: Math.ceil(total / limit)
+    });
+
   } catch (err) {
-    console.error('Error al buscar equipos:', err);
+    console.error('❌ Error al buscar equipos:', err);
     res.status(500).json({ error: 'Error al buscar equipos' });
   }
 };
+
 
 
 // 🆕 Crear nuevo equipo
@@ -198,6 +214,33 @@ const crearEquipo = async (req, res) => {
   }
 };
 
+//REGISTRAR INGRESOS
+
+const registrarIngreso = async (req, res) => {
+  const { idEquipo } = req.params;
+
+  try {
+    const equipo = await Equipo.findById(idEquipo);
+    if (!equipo) return res.status(404).json({ mensaje: 'Equipo no encontrado' });
+
+    // Crear nuevo registro de ingreso
+    const nuevoIngreso = {
+      fecha: new Date(), // fecha actual
+    };
+
+    // Push al array historial_ingresos
+    equipo.historial_ingresos = equipo.historial_ingresos || [];
+    equipo.historial_ingresos.push(nuevoIngreso);
+
+    await equipo.save();
+
+    res.status(200).json({ mensaje: 'Ingreso registrado correctamente', ingreso: nuevoIngreso });
+  } catch (err) {
+    console.error('Error registrando ingreso:', err);
+    res.status(500).json({ mensaje: 'Error al registrar ingreso', detalle: err.message });
+  }
+};
+
 
 // ✏️ Actualizar equipo por ID
 const actualizarEquipo = async (req, res) => {
@@ -255,6 +298,7 @@ module.exports = {
   crearEquipo,
   actualizarEquipo,
   eliminarEquipo,
-  obtenerUltimosEquipos
+  obtenerUltimosEquipos,
+  registrarIngreso
 
 };
