@@ -4,6 +4,7 @@ const conectarMongo = require('./config/config');
 const unidadRoutes = require('./routes/unidadRoute');
 const equipoRoutes = require('./routes/equipoRoute');
 const reparacionesRoutes = require('./routes/reparacion');
+const actaRoutes = require('./routes/actaRoute');
 
 const cors = require('cors'); 
 
@@ -34,6 +35,7 @@ conectarMongo(); // Conexión a MongoDB
 app.use('/api/unidades', unidadRoutes);
 app.use('/api/equipos', equipoRoutes);
 app.use('/api/reparaciones', reparacionesRoutes);
+app.use('/api/actas', actaRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

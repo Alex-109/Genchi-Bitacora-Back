@@ -27,10 +27,7 @@ const reparacionesSchema = new Schema({
         type: Object, 
         required: true 
     },
-    fecha: {
-        type: Date,
-        default: Date.now
-    }
+   
     
 
 }, { timestamps: true });

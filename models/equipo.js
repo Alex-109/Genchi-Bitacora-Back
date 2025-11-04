@@ -71,6 +71,7 @@ const equipoSchema = new Schema({
     historial_ingresos: [
     {
       fecha: { type: Date, required: true },
+      estado: { type: String, required: true },
     }
     ],
 

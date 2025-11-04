@@ -218,19 +218,24 @@ const crearEquipo = async (req, res) => {
 
 const registrarIngreso = async (req, res) => {
   const { idEquipo } = req.params;
+  const { estado } = req.body;
 
   try {
-    const equipo = await Equipo.findById(idEquipo);
+    const equipo = await Equipo.findOne({ id: Number(idEquipo) }); // Cambiado de findById a findOne
     if (!equipo) return res.status(404).json({ mensaje: 'Equipo no encontrado' });
 
     // Crear nuevo registro de ingreso
     const nuevoIngreso = {
-      fecha: new Date(), // fecha actual
+      fecha: new Date(),
+      estado: estado
     };
 
     // Push al array historial_ingresos
     equipo.historial_ingresos = equipo.historial_ingresos || [];
     equipo.historial_ingresos.push(nuevoIngreso);
+
+    // Actualizar el estado actual del equipo
+    equipo.estado = estado;
 
     await equipo.save();
 
@@ -244,20 +249,32 @@ const registrarIngreso = async (req, res) => {
 
 // ✏️ Actualizar equipo por ID
 const actualizarEquipo = async (req, res) => {
-  const { id, changes } = req.body;
+  const { id, changes } = req.body;
 
-  try {
-    // 🔁 Transformar almacenamiento si viene como número
-    if (typeof changes.almacenamiento === 'number') {
-      changes.almacenamiento = `${changes.almacenamiento} GB`;
+  try {
+    // 🔁 Transformar almacenamiento si viene como número
+    if (typeof changes.almacenamiento === 'number') {
+      changes.almacenamiento = `${changes.almacenamiento} GB`;
+    }
+
+    // ✅ CORRECCIÓN DE BÚSQUEDA:
+    // Cambiamos findByIdAndUpdate (que busca por _id) 
+    // por findOneAndUpdate (buscando por el campo 'id' numérico).
+    const equipoActualizado = await Equipo.findOneAndUpdate(
+        { id: id }, // Condición de búsqueda
+        { $set: changes }, // Cambios a aplicar
+        { new: true } // Opcional: devuelve el documento actualizado
+    );
+
+    if (!equipoActualizado) {
+        return res.status(404).json({ mensaje: 'Equipo no encontrado para actualizar.' });
     }
 
-    await Equipo.findByIdAndUpdate(id, changes);
-    res.json({ mensaje: 'Equipo actualizado' });
-  } catch (err) {
-    console.error('❌ Error al actualizar equipo:', err);
-    res.status(500).json({ error: 'Error al actualizar equipo' });
-  }
+    res.json({ mensaje: 'Equipo actualizado' });
+  } catch (err) {
+    console.error('❌ Error al actualizar equipo:', err);
+    res.status(500).json({ error: 'Error al actualizar equipo' });
+  }
 };
 
 
