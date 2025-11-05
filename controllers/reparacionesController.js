@@ -2,6 +2,19 @@
 
 const Reparaciones = require('../models/reparaciones');
 const Equipo = require('../models/equipo');
+// ✅ Importar el modelo Contador
+const Contador = require('../models/contador'); 
+
+// ✅ FUNCIÓN AUXILIAR: Obtener y e Incrementar el contador (USADA SOLO PARA INCREMENTO ATÓMICO)
+const getNextSequenceValue = async (sequenceName) => {
+    // Busca el contador, lo incrementa en 1 y retorna el nuevo valor.
+    const sequenceDocument = await Contador.findOneAndUpdate(
+        { _id: sequenceName },
+        { $inc: { seq: 1 } },
+        { new: true, upsert: true } // new: true retorna el doc actualizado. upsert: true lo crea si no existe.
+    );
+    return sequenceDocument.seq;
+};
 
 // Iniciar una reparación: actualiza equipo y registra cambios
 const iniciarReparacion = async (req, res) => {
@@ -22,22 +35,27 @@ const iniciarReparacion = async (req, res) => {
       }
     }
 
-    // ✅ CORRECCIÓN DE VALIDACIÓN:
-    // Ahora solo falla si NO hay cambios Y TAMPOCO hay observación.
+    // ✅ CORRECCIÓN DE VALIDACIÓN:
+    // Ahora solo falla si NO hay cambios Y TAMPOCO hay observación.
     if (Object.keys(cambiosRegistrados).length === 0 && (!obs || obs.trim() === '')) {
       return res.status(400).json({ message: 'No hay cambios ni observaciones para registrar.' });
     }
 
-    // Si hubo cambios, guarda el equipo (actualiza atributos)
-    if (Object.keys(cambiosRegistrados).length > 0) {
-      await equipo.save();
-    }
+    // Si hubo cambios, guarda el equipo (actualiza atributos)
+    if (Object.keys(cambiosRegistrados).length > 0) {
+      await equipo.save();
+    }
+
+    // 1. Obtener el siguiente número de acta secuencial de forma atómica
+    const nextActaNumber = await getNextSequenceValue('num_acta_global');
 
     const nuevaRepa = new Reparaciones({
       id_equipo: equipo.id,
       rut,
       obs,
-      cambios: cambiosRegistrados
+      cambios: cambiosRegistrados,
+      // 2. Asignar el contador generado
+      contador_num_acta: nextActaNumber 
     });
 
     await nuevaRepa.save();

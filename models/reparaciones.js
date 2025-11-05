@@ -27,6 +27,10 @@ const reparacionesSchema = new Schema({
         type: Object, 
         required: true 
     },
+    contador_num_acta: {
+        type: Number,
+        default: 0
+    }
    
     
 

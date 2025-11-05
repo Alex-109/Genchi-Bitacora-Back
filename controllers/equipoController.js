@@ -152,7 +152,7 @@ const buscarEquipos = async (req, res) => {
 
 // 🆕 Crear nuevo equipo
 const crearEquipo = async (req, res) => {
-  let { ip, serie, num_inv, nombre_equipo, almacenamiento } = req.body;
+  let { ip, serie, num_inv, nombre_equipo, almacenamiento} = req.body;
   const errores = [];
 
   // --- Validar formato de IP (IPv4 simple) ---
@@ -202,6 +202,7 @@ const crearEquipo = async (req, res) => {
       num_inv: limpiarCampo(num_inv),
       ip: limpiarCampo(ip),
       nombre_equipo: limpiarCampo(nombre_equipo)
+
     });
 
     await nuevo.save();

@@ -1,3 +1,4 @@
+// server.js o app.js
 const express = require('express');
 const dotenv = require('dotenv');
 const conectarMongo = require('./config/config');
@@ -12,24 +13,20 @@ dotenv.config();
 
 const app = express();
 
-// Configuración CORS
+// 🛠️ CONFIGURACIÓN CORS CORREGIDA
 const corsOptions = {
-    origin: 'http://localhost:3000',
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
-    optionsSuccessStatus: 204
+    origin: 'http://localhost:3000', // Origen de tu frontend
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    credentials: true,
+    optionsSuccessStatus: 204,
+    // 🔥 CLAVE: Exponer la cabecera Content-Disposition para que el frontend la lea
+    exposedHeaders: ['Content-Disposition'] 
 };
 app.use(cors(corsOptions));
 
 app.use(express.json());
 
 conectarMongo(); // Conexión a MongoDB
-
-// 🔹 Ya no sincronizamos índices automáticamente
-// const Equipo = require('./models/equipo');
-// Equipo.syncIndexes()
-//   .then(() => console.log('✅ Índices de Equipo sincronizados'))
-//   .catch(err => console.error('❌ Error sincronizando índices de Equipo:', err));
 
 // Rutas
 app.use('/api/unidades', unidadRoutes);
@@ -39,5 +36,5 @@ app.use('/api/actas', actaRoutes);
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
 });

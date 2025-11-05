@@ -1,7 +1,8 @@
+// models/equipo.js
 const mongoose = require('mongoose');
 const { Schema, model } = mongoose;
 const AutoIncrement = require('mongoose-sequence')(mongoose);
-const Reparaciones = require('./reparaciones'); // 👈 Importamos el modelo hijo
+const Reparaciones = require('./reparaciones');
 
 const equipoSchema = new Schema({
     // --- Campos de Identificación Base (Serie, Modelo, Ubicación) ---
@@ -48,7 +49,7 @@ const equipoSchema = new Schema({
     // --- Campo clave para tipo de equipo ---
     tipo_equipo: {
         type: String,
-        enum: ['pc', 'impresora'],
+        enum: ['pc', 'impresora', 'notebook'], // ✅ ÚNICO CAMBIO: añadí 'notebook'
         required: [true, 'El tipo de equipo es obligatorio.'],
         lowercase: true,
         trim: true
@@ -60,7 +61,7 @@ const equipoSchema = new Schema({
         unique: true,
         sparse: true
     },
-    usuario: { type: String },
+    nombre_usuario: { type: String },
     ver_win: { type: String },
     windows: { type: String },
     antivirus: { type: String },
@@ -80,7 +81,7 @@ const equipoSchema = new Schema({
     drum: { type: String },
     conexion: { type: String }
 
-}, { timestamps: true });
+}, { timestamps: true }); // ✅ SIN opciones adicionales
 
 // 🔢 Plugin de autoincremento
 equipoSchema.plugin(AutoIncrement, { inc_field: 'id', id: 'equipo_id_counter' });
@@ -89,9 +90,6 @@ equipoSchema.plugin(AutoIncrement, { inc_field: 'id', id: 'equipo_id_counter' })
 -------------------------------------------------------
 🧩 Eliminación en cascada de reparaciones asociadas
 -------------------------------------------------------
-- Este middleware se ejecuta automáticamente ANTES
-  de eliminar un equipo con `findOneAndDelete`.
-- Evita dejar reparaciones huérfanas en la base de datos.
 */
 equipoSchema.pre('findOneAndDelete', async function (next) {
     try {
