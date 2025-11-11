@@ -14,13 +14,23 @@ dotenv.config();
 const app = express();
 
 // 🛠️ CONFIGURACIÓN CORS CORREGIDA
+const allowedOrigins = [
+  'http://localhost:3000',
+  'https://genchibitacora.netlify.app'
+];
+
 const corsOptions = {
-    origin: 'http://localhost:3000', // Origen de tu frontend
-    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-    credentials: true,
-    optionsSuccessStatus: 204,
-    // 🔥 CLAVE: Exponer la cabecera Content-Disposition para que el frontend la lea
-    exposedHeaders: ['Content-Disposition'] 
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  credentials: true,
+  optionsSuccessStatus: 204,
+  exposedHeaders: ['Content-Disposition']
 };
 app.use(cors(corsOptions));
 
