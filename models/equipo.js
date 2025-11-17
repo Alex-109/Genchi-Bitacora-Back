@@ -18,18 +18,15 @@ const equipoSchema = new Schema({
     },
     num_inv: { 
         type: String,
-        unique: true,
-        sparse: true
+     
     },
     serie: { 
         type: String,
-        unique: true,
-        sparse: true
+        
     },
     ip: { 
         type: String,
-        unique: true,
-        sparse: true
+       
     },
 
     // Relación a Unidad
