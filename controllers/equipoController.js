@@ -149,69 +149,185 @@ const buscarEquipos = async (req, res) => {
 };
 
 
-
-// 🆕 Crear nuevo equipo
+// 🆕 Crear nuevo equipo - CORREGIDO PARA CAMPOS VACÍOS
 const crearEquipo = async (req, res) => {
-  let { ip, serie, num_inv, nombre_equipo, almacenamiento} = req.body;
+  console.log('🔍 [CREAR_EQUIPO] Iniciando creación de equipo...');
+  console.log('📦 [CREAR_EQUIPO] Body recibido:', JSON.stringify(req.body, null, 2));
+  
+  let { ip, serie, num_inv, nombre_equipo, almacenamiento, tipo_equipo, marca, nombre_unidad } = req.body;
   const errores = [];
+
+  console.log('🔍 [CREAR_EQUIPO] Campos extraídos:', {
+    tipo_equipo,
+    marca,
+    nombre_unidad,
+    ip,
+    serie,
+    num_inv,
+    nombre_equipo,
+    almacenamiento
+  });
 
   // --- Validar formato de IP (IPv4 simple) ---
   const ipRegex = /^(?!.*\.\.)(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
-  if (ip && !ipRegex.test(ip)) {
+  if (ip && ip.trim() !== '' && !ipRegex.test(ip)) {
+    console.log('❌ [CREAR_EQUIPO] IP inválida:', ip);
     errores.push('Formato de IP inválido.');
   }
 
+  // ✅ Validar campos obligatorios
+  if (!tipo_equipo || tipo_equipo.trim() === '') {
+    console.log('❌ [CREAR_EQUIPO] tipo_equipo faltante');
+    errores.push('El tipo de equipo es obligatorio.');
+  }
+  if (!marca || marca.trim() === '') {
+    console.log('❌ [CREAR_EQUIPO] marca faltante');
+    errores.push('La marca es obligatoria.');
+  }
+  if (!nombre_unidad || nombre_unidad.trim() === '') {
+    console.log('❌ [CREAR_EQUIPO] nombre_unidad faltante');
+    errores.push('La unidad es obligatoria.');
+  }
+
+  console.log('🔍 [CREAR_EQUIPO] Errores de validación:', errores);
+
   if (errores.length > 0) {
+    console.log('❌ [CREAR_EQUIPO] Validación fallida, retornando 400');
     return res.status(400).json({ errores });
   }
 
   try {
     // --- Transformar almacenamiento si es número ---
+    console.log('🔍 [CREAR_EQUIPO] Tipo de almacenamiento:', typeof almacenamiento, 'Valor:', almacenamiento);
     if (typeof almacenamiento === 'number') {
       req.body.almacenamiento = `${almacenamiento} GB`;
+      console.log('🔍 [CREAR_EQUIPO] Almacenamiento transformado:', req.body.almacenamiento);
     }
 
-    // --- Construir condiciones solo con valores no vacíos ---
+    // ✅ CORRECCIÓN: Solo buscar duplicados en campos NO VACÍOS
     const condiciones = [];
-    if (serie != null && serie !== '') condiciones.push({ serie });
-    if (num_inv != null && num_inv !== '') condiciones.push({ num_inv });
-    if (ip != null && ip !== '') condiciones.push({ ip });
-    if (nombre_equipo != null && nombre_equipo !== '') condiciones.push({ nombre_equipo });
+    
+    // Solo agregar a condiciones si el campo tiene valor real
+    if (serie && serie.trim() !== '') {
+      console.log('🔍 [CREAR_EQUIPO] Agregando condición serie:', serie);
+      condiciones.push({ serie: serie.trim() });
+    }
+    
+    if (num_inv && num_inv.trim() !== '') {
+      console.log('🔍 [CREAR_EQUIPO] Agregando condición num_inv:', num_inv);
+      condiciones.push({ num_inv: num_inv.trim() });
+    }
+    
+    if (ip && ip.trim() !== '') {
+      console.log('🔍 [CREAR_EQUIPO] Agregando condición ip:', ip);
+      condiciones.push({ ip: ip.trim() });
+    }
+    
+    if (nombre_equipo && nombre_equipo.trim() !== '') {
+      console.log('🔍 [CREAR_EQUIPO] Agregando condición nombre_equipo:', nombre_equipo);
+      condiciones.push({ nombre_equipo: nombre_equipo.trim() });
+    }
 
-    // --- Buscar duplicados solo si hay campos a revisar ---
+    console.log('🔍 [CREAR_EQUIPO] Condiciones para búsqueda de duplicados:', condiciones);
+
+    // --- Buscar duplicados solo si hay campos con valores reales ---
     let duplicado = null;
     if (condiciones.length > 0) {
+      console.log('🔍 [CREAR_EQUIPO] Buscando duplicados...');
       duplicado = await Equipo.findOne({ $or: condiciones });
+      console.log('🔍 [CREAR_EQUIPO] Resultado búsqueda duplicados:', duplicado ? 'ENCONTRADO' : 'NO ENCONTRADO');
+      
+      if (duplicado) {
+        console.log('🔍 [CREAR_EQUIPO] Duplicado encontrado:', duplicado);
+      }
+    } else {
+      console.log('🔍 [CREAR_EQUIPO] No hay condiciones para buscar duplicados (todos los campos opcionales están vacíos)');
     }
 
     if (duplicado) {
       let mensaje = 'Ya existe un equipo con ';
-      if (serie && duplicado.serie === serie) mensaje += 'esa serie.';
-      else if (num_inv && duplicado.num_inv === num_inv) mensaje += 'ese número de inventario.';
-      else if (ip && duplicado.ip === ip) mensaje += 'esa dirección IP.';
-      else if (nombre_equipo && duplicado.nombre_equipo === nombre_equipo) mensaje += 'ese nombre de equipo.';
+      if (serie && serie.trim() !== '' && duplicado.serie === serie.trim()) {
+        mensaje += 'esa serie.';
+      } else if (num_inv && num_inv.trim() !== '' && duplicado.num_inv === num_inv.trim()) {
+        mensaje += 'ese número de inventario.';
+      } else if (ip && ip.trim() !== '' && duplicado.ip === ip.trim()) {
+        mensaje += 'esa dirección IP.';
+      } else if (nombre_equipo && nombre_equipo.trim() !== '' && duplicado.nombre_equipo === nombre_equipo.trim()) {
+        mensaje += 'ese nombre de equipo.';
+      }
+      
+      console.log('❌ [CREAR_EQUIPO] Duplicado detectado:', mensaje);
       return res.status(400).json({ mensaje });
     }
 
-    // --- Convertir cadenas vacías a null antes de guardar ---
-    const limpiarCampo = (valor) => (valor === '' ? null : valor);
+    // ✅ CORRECCIÓN: Convertir cadenas vacías a undefined (no a null)
+    const limpiarCampo = (valor) => {
+      if (valor === '' || valor === null) {
+        return undefined; // Mejor usar undefined para que Mongoose no incluya el campo
+      }
+      return valor.trim();
+    };
 
-    const nuevo = new Equipo({
+    const datosParaGuardar = {
       ...req.body,
-      serie: limpiarCampo(serie),
-      num_inv: limpiarCampo(num_inv),
-      ip: limpiarCampo(ip),
-      nombre_equipo: limpiarCampo(nombre_equipo)
+      // Solo incluir campos si tienen valor
+      ...(serie !== undefined && serie !== '' && { serie: limpiarCampo(serie) }),
+      ...(num_inv !== undefined && num_inv !== '' && { num_inv: limpiarCampo(num_inv) }),
+      ...(ip !== undefined && ip !== '' && { ip: limpiarCampo(ip) }),
+      ...(nombre_equipo !== undefined && nombre_equipo !== '' && { nombre_equipo: limpiarCampo(nombre_equipo) })
+    };
 
+    // Asegurar que los campos obligatorios estén presentes y limpios
+    datosParaGuardar.tipo_equipo = tipo_equipo.trim();
+    datosParaGuardar.marca = marca.trim();
+    datosParaGuardar.nombre_unidad = nombre_unidad.trim();
+
+    console.log('🔍 [CREAR_EQUIPO] Datos finales para guardar:', JSON.stringify(datosParaGuardar, null, 2));
+
+    const nuevo = new Equipo(datosParaGuardar);
+    console.log('🔍 [CREAR_EQUIPO] Objeto Mongoose creado');
+
+    console.log('💾 [CREAR_EQUIPO] Guardando en la base de datos...');
+    await nuevo.save();
+    console.log('✅ [CREAR_EQUIPO] Equipo guardado exitosamente. ID:', nuevo.id);
+
+    res.status(201).json({ 
+      mensaje: 'Equipo creado correctamente.',
+      equipo: {
+        id: nuevo.id,
+        tipo_equipo: nuevo.tipo_equipo,
+        marca: nuevo.marca,
+        nombre_unidad: nuevo.nombre_unidad
+      }
     });
 
-    await nuevo.save();
-
-    res.status(201).json({ mensaje: 'Equipo creado correctamente.' });
-
   } catch (err) {
-    console.error('❌ Error al guardar el equipo:', err);
-    return res.status(500).json({ mensaje: 'Error al crear el equipo.', detalle: err.message });
+    console.error('❌ [CREAR_EQUIPO] Error al guardar el equipo:');
+    console.error('❌ [CREAR_EQUIPO] Nombre del error:', err.name);
+    console.error('❌ [CREAR_EQUIPO] Mensaje:', err.message);
+    console.error('❌ [CREAR_EQUIPO] Stack:', err.stack);
+    
+    if (err.name === 'ValidationError') {
+      console.error('❌ [CREAR_EQUIPO] Errores de validación de Mongoose:', err.errors);
+      return res.status(400).json({ 
+        mensaje: 'Error de validación', 
+        errores: Object.values(err.errors).map(e => e.message) 
+      });
+    }
+    
+    if (err.code === 11000) {
+      console.error('❌ [CREAR_EQUIPO] Error de duplicado:', err.keyValue);
+      return res.status(400).json({ 
+        mensaje: 'Error de duplicación en la base de datos', 
+        campo: Object.keys(err.keyValue)[0],
+        valor: Object.values(err.keyValue)[0]
+      });
+    }
+
+    return res.status(500).json({ 
+      mensaje: 'Error al crear el equipo.', 
+      detalle: err.message 
+    });
   }
 };
 
