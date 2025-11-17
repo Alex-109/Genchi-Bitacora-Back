@@ -1,9 +1,16 @@
 const ObjetoVario = require('../models/objetoVario');
 
-// ✅ Obtener todos los objetos varios - MODIFICADO
+// ✅ Obtener todos los objetos varios - CON PAGINACIÓN
 const obtenerObjetosVarios = async (req, res) => {
   try {
-    const { unidad, buscar, fechaInicio, fechaFin } = req.query;
+    const { 
+      unidad, 
+      buscar, 
+      fechaInicio, 
+      fechaFin,
+      pagina = 1,
+      limit = 9
+    } = req.query;
     
     let filtro = {};
     
@@ -21,7 +28,7 @@ const obtenerObjetosVarios = async (req, res) => {
       ];
     }
 
-    // ✅ NUEVO: Filtro por rango de fechas
+    // ✅ Filtro por rango de fechas
     if (fechaInicio || fechaFin) {
       filtro.createdAt = {};
       
@@ -36,12 +43,33 @@ const obtenerObjetosVarios = async (req, res) => {
       }
     }
 
-    const objetos = await ObjetoVario.find(filtro).sort({ createdAt: -1 });
+    // ✅ CALCULAR PAGINACIÓN
+    const paginaNum = Math.max(1, parseInt(pagina));
+    const limitNum = Math.max(1, parseInt(limit));
+    const skip = (paginaNum - 1) * limitNum;
+
+    // ✅ OBTENER TOTAL DE DOCUMENTOS
+    const total = await ObjetoVario.countDocuments(filtro);
+    
+    // ✅ OBTENER DATOS PAGINADOS
+    const objetos = await ObjetoVario.find(filtro)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum);
+
+    // ✅ CALCULAR TOTAL DE PÁGINAS
+    const totalPaginas = Math.ceil(total / limitNum);
     
     res.json({
       success: true,
       data: objetos,
-      total: objetos.length
+      paginacion: {
+        paginaActual: paginaNum,
+        totalPaginas: totalPaginas,
+        totalObjetos: total,
+        hasNext: paginaNum < totalPaginas,
+        hasPrev: paginaNum > 1
+      }
     });
     
   } catch (error) {
