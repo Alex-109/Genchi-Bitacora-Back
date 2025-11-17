@@ -58,15 +58,6 @@ const equipoSchema = new Schema({
     // --- Campos específicos de PC ---
     nombre_equipo: {
     type: String,
-    unique: true,
-    sparse: true,
-    default: null,
-    trim: true,
-    set: v => {
-        if (!v) return null;           // null, undefined, "", 0 → null
-        if (v.trim() === "") return null;  
-        return v.trim();               // limpia espacios
-    }
 },
 
     nombre_usuario: { type: String },
