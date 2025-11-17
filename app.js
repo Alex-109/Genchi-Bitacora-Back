@@ -8,84 +8,119 @@ const reparacionesRoutes = require('./routes/reparacion');
 const actaRoutes = require('./routes/actaRoute');
 const objetosVariosRoutes = require('./routes/objetosVarios');
 
-const cors = require('cors'); 
+const cors = require('cors');
 
 dotenv.config();
 
 const app = express();
 
-// 🛠️ CONFIGURACIÓN CORS CORREGIDA
+/* -----------------------------------------------------
+   🔐 CORS CONFIGURACIÓN CORRECTA PARA PRODUCCIÓN + DEV
+------------------------------------------------------*/
+
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+    'https://genchi-inv.netlify.app'
+];
+
 const corsOptions = {
-    origin: 'http://localhost:3000', // Origen de tu frontend
+    origin: function (origin, callback) {
+        // Permite Postman, Curl, o requests sin origin
+        if (!origin) return callback(null, true);
+
+        if (allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            console.log('⛔ CORS bloqueado para:', origin);
+            callback(new Error('CORS no permitido para este origen'));
+        }
+    },
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
-    optionsSuccessStatus: 204,
-    // 🔥 CLAVE: Exponer la cabecera Content-Disposition para que el frontend la lea
-    exposedHeaders: ['Content-Disposition'] 
+    exposedHeaders: ['Content-Disposition'], // Necesario para descargas
 };
+
 app.use(cors(corsOptions));
+
+/* -----------------------------------------------------
+   🔧 MIDDLEWARES
+------------------------------------------------------*/
 
 app.use(express.json());
 
-// ✅ MIDDLEWARE DE LOGGING PARA DEBUG
+// 👀 Logging de peticiones
 app.use((req, res, next) => {
     console.log(`📨 [${new Date().toLocaleTimeString()}] ${req.method} ${req.originalUrl}`);
     next();
 });
 
-conectarMongo(); // Conexión a MongoDB
+/* -----------------------------------------------------
+   📌 CONEXIÓN A MONGO
+------------------------------------------------------*/
 
-// ✅ CARGAR RUTAS CON VERIFICACIÓN
+conectarMongo();
+
+/* -----------------------------------------------------
+   📌 RUTAS
+------------------------------------------------------*/
+
 console.log('🔍 Cargando rutas...');
 
 try {
     app.use('/api/unidades', unidadRoutes);
-    console.log('✅ Ruta /api/unidades cargada');
+    console.log('✅ /api/unidades');
 } catch (error) {
-    console.error('❌ Error cargando unidades:', error);
+    console.error('❌ Error en unidades:', error);
 }
 
 try {
     app.use('/api/equipos', equipoRoutes);
-    console.log('✅ Ruta /api/equipos cargada');
+    console.log('✅ /api/equipos');
 } catch (error) {
-    console.error('❌ Error cargando equipos:', error);
+    console.error('❌ Error en equipos:', error);
 }
 
 try {
     app.use('/api/reparaciones', reparacionesRoutes);
-    console.log('✅ Ruta /api/reparaciones cargada');
+    console.log('✅ /api/reparaciones');
 } catch (error) {
-    console.error('❌ Error cargando reparaciones:', error);
+    console.error('❌ Error en reparaciones:', error);
 }
 
 try {
     app.use('/api/actas', actaRoutes);
-    console.log('✅ Ruta /api/actas cargada');
+    console.log('✅ /api/actas');
 } catch (error) {
-    console.error('❌ Error cargando actas:', error);
+    console.error('❌ Error en actas:', error);
 }
 
 try {
     app.use('/api/objetos-varios', objetosVariosRoutes);
-    console.log('✅ Ruta /api/objetos-varios cargada');
+    console.log('✅ /api/objetos-varios');
 } catch (error) {
-    console.error('❌ Error cargando objetos varios:', error);
+    console.error('❌ Error en objetos varios:', error);
 }
 
-// ✅ RUTA DE HEALTH CHECK
+/* -----------------------------------------------------
+   ❤️ HEALTH CHECK
+------------------------------------------------------*/
+
 app.get('/api/health', (req, res) => {
-    res.json({ 
-        status: 'OK', 
+    res.json({
+        status: 'OK',
         timestamp: new Date(),
         message: 'Servidor funcionando correctamente'
     });
 });
 
-// ✅ MANEJO DE RUTAS NO ENCONTRADAS - CORREGIDO
-app.use((req, res, next) => {
+/* -----------------------------------------------------
+   ❌ RUTA NO ENCONTRADA
+------------------------------------------------------*/
+
+app.use((req, res) => {
     console.log(`❌ Ruta no encontrada: ${req.method} ${req.originalUrl}`);
-    res.status(404).json({ 
+    res.status(404).json({
         error: `Ruta ${req.method} ${req.originalUrl} no encontrada`,
         availableRoutes: [
             'GET  /api/health',
@@ -97,16 +132,24 @@ app.use((req, res, next) => {
     });
 });
 
-// ✅ MANEJO DE ERRORES GLOBAL
+/* -----------------------------------------------------
+   💥 MANEJO GLOBAL DE ERRORES
+------------------------------------------------------*/
+
 app.use((err, req, res, next) => {
     console.error('💥 Error no manejado:', err);
-    res.status(500).json({ 
+    res.status(500).json({
         error: 'Error interno del servidor',
-        message: err.message 
+        message: err.message
     });
 });
 
+/* -----------------------------------------------------
+   🚀 SERVIDOR
+------------------------------------------------------*/
+
 const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, () => {
     console.log(`\n🚀 Servidor corriendo en puerto ${PORT}`);
     console.log(`📡 Endpoints disponibles:`);
