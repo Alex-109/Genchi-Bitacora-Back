@@ -159,7 +159,7 @@ const crearEquipo = async (req, res) => {
 
   console.log('🔍 [CREAR_EQUIPO] Campos extraídos:', {
     tipo_equipo,
-    marca,
+    marca, 
     nombre_unidad,
     ip,
     serie,
@@ -398,32 +398,46 @@ const actualizarEquipo = async (req, res) => {
 // ❌ Eliminar equipo por ID autoincrementable
 
 const eliminarEquipo = async (req, res) => {
-  try {
-    const rawId = req.params.id;
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-    // Validar que sea un número entero
-    const idValue = Number(rawId);
-    if (isNaN(idValue) || !Number.isInteger(idValue)) {
-      return res.status(400).json({ message: 'ID inválido. Debe ser un número entero.' });
-    }
+  try {
+    const rawId = req.params.id;
+    const idValue = Number(rawId);
 
-    // Buscar y eliminar por campo "id"
-    const equipoEliminado = await Equipo.findOneAndDelete({ id: idValue });
+    if (isNaN(idValue) || !Number.isInteger(idValue)) {
+      await session.abortTransaction();
+      return res.status(400).json({ message: 'ID inválido.' });
+    }
 
-    if (!equipoEliminado) {
-      return res.status(404).json({ message: `No se encontró ningún equipo con ID ${idValue}.` });
-    }
+    // 1. Eliminar reparaciones primero
+    await Reparaciones.deleteMany({ id_equipo: idValue }).session(session);
+    
+    // 2. Eliminar equipo
+    const equipoEliminado = await Equipo.findOneAndDelete({ id: idValue }).session(session);
 
-    return res.status(200).json({
-      message: `Equipo con ID ${idValue} eliminado correctamente.`,
-      equipo: equipoEliminado
-    });
-  } catch (error) {
-    return res.status(500).json({
-      message: 'Error al eliminar el equipo.',
-      error: error.message
-    });
-  }
+    if (!equipoEliminado) {
+      await session.abortTransaction();
+      return res.status(404).json({ message: `Equipo con ID ${idValue} no encontrado.` });
+    }
+
+    // 3. Confirmar transacción
+    await session.commitTransaction();
+
+    return res.status(200).json({
+      message: `Equipo con ID ${idValue} eliminado correctamente.`,
+      equipo: equipoEliminado
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error('❌ Error en transacción de eliminación:', error);
+    return res.status(500).json({
+      message: 'Error al eliminar el equipo.',
+      error: error.message
+    });
+  } finally {
+    session.endSession();
+  }
 };
 
 
