@@ -395,51 +395,60 @@ const actualizarEquipo = async (req, res) => {
 };
 
 
-// ❌ Eliminar equipo por ID autoincrementable
 
+// ❌ Eliminar equipo por ID - VERSIÓN CORREGIDA
 const eliminarEquipo = async (req, res) => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const rawId = req.params.id;
     const idValue = Number(rawId);
 
     if (isNaN(idValue) || !Number.isInteger(idValue)) {
-      await session.abortTransaction();
-      return res.status(400).json({ message: 'ID inválido.' });
+      return res.status(400).json({ message: 'ID inválido. Debe ser un número entero.' });
     }
 
-    // 1. Eliminar reparaciones primero
-    await Reparaciones.deleteMany({ id_equipo: idValue }).session(session);
-    
-    // 2. Eliminar equipo
-    const equipoEliminado = await Equipo.findOneAndDelete({ id: idValue }).session(session);
+    // ✅ VERIFICAR SI EL EQUIPO EXISTE PRIMERO
+    const equipoExistente = await Equipo.findOne({ id: idValue });
+    if (!equipoExistente) {
+      return res.status(404).json({ message: `No se encontró ningún equipo con ID ${idValue}.` });
+    }
+
+    // ✅ ELIMINAR REPARACIONES ASOCIADAS PRIMERO
+    const resultadoReparaciones = await Reparaciones.deleteMany({ id_equipo: idValue });
+    console.log(`🧹 Eliminadas ${resultadoReparaciones.deletedCount} reparaciones del equipo ${idValue}`);
+
+    // ✅ ELIMINAR EL EQUIPO
+    const equipoEliminado = await Equipo.findOneAndDelete({ id: idValue });
 
     if (!equipoEliminado) {
-      await session.abortTransaction();
-      return res.status(404).json({ message: `Equipo con ID ${idValue} no encontrado.` });
+      // Esto no debería pasar ya que verificamos arriba, pero por seguridad
+      return res.status(404).json({ message: `Error: Equipo con ID ${idValue} no encontrado para eliminar.` });
     }
 
-    // 3. Confirmar transacción
-    await session.commitTransaction();
+    console.log(`✅ Equipo con ID ${idValue} eliminado correctamente`);
 
     return res.status(200).json({
       message: `Equipo con ID ${idValue} eliminado correctamente.`,
-      equipo: equipoEliminado
+      equipo: equipoEliminado,
+      reparacionesEliminadas: resultadoReparaciones.deletedCount
     });
+
   } catch (error) {
-    await session.abortTransaction();
-    console.error('❌ Error en transacción de eliminación:', error);
+    console.error('❌ Error detallado al eliminar equipo:', error);
+    
+    // ✅ ERROR MÁS ESPECÍFICO
+    if (error.name === 'MongoError' || error.name === 'MongoServerError') {
+      return res.status(500).json({
+        message: 'Error de base de datos al eliminar el equipo.',
+        error: error.message
+      });
+    }
+    
     return res.status(500).json({
       message: 'Error al eliminar el equipo.',
       error: error.message
     });
-  } finally {
-    session.endSession();
   }
 };
-
 
 module.exports = {
   buscarEquipos,
