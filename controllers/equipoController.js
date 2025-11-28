@@ -43,13 +43,7 @@ const obtenerUltimosEquipos = async (req, res) => {
 };
 
 /* =========================================================================
-   2️⃣  API: Buscar equipos con filtros y búsqueda general
-   - Método: POST
-   - Body: 
-     {
-       tipo_equipo, marca, nombre_unidad, cpu, ram, almacenamiento,
-       tipo_almacenamiento, query, fechaInicio, fechaFin, limit, pagina
-     }
+   2️⃣  API: Buscar equipos con filtros FLEXIBLES
    ========================================================================= */
 const buscarEquipos = async (req, res) => {
   
@@ -74,69 +68,109 @@ const buscarEquipos = async (req, res) => {
   const skip = (pagina - 1) * limit;
 
   try {
-    // 🔹 1. Filtro por tipo de equipo
+    // 🔹 1. Filtro por tipo de equipo (exacto)
     if (tipo_equipo && tipo_equipo !== 'todos') {
       filtros.tipo_equipo = tipo_equipo.toLowerCase().trim();
     }
 
-    // 🔹 2. Filtros aproximados
+    // 🔹 2. Filtros aproximados para texto
     if (marca) filtros.marca = { $regex: createFlexiblePattern(marca) };
     if (nombre_unidad) filtros.nombre_unidad = { $regex: createFlexiblePattern(nombre_unidad) };
-    if (cpu) filtros.cpu = { $regex: createFlexiblePattern(cpu) };
+    
+    // 🔹 3. ✅ CORREGIDO: CPU con búsqueda flexible
+    if (cpu) {
+      filtros.cpu = { $regex: createFlexiblePattern(cpu) };
+    }
 
-    // 🔹 2.5 Filtros exactos o personalizados
-    if (ram) filtros.ram = ram;
-
-    if (almacenamiento) {
-      if (almacenamiento === "Otros") {
-        filtros.almacenamiento = { $nin: ["250","256","500","512","1000"] };
-      } else {
-        filtros.almacenamiento = almacenamiento;
+    // 🔹 4. ✅ CORREGIDO: RAM con búsqueda FLEXIBLE
+    if (ram) {
+      // El filtro viene como número (8, 16, etc.) o string ("8 GB")
+      // Buscar cualquier valor que contenga ese número, sin importar formato
+      const ramNumero = ram.toString().replace(/\D/g, ''); // Extraer solo números
+      if (ramNumero) {
+        filtros.ram = { $regex: new RegExp(ramNumero, 'i') };
       }
     }
 
-    // ✅ tipo_almacenamiento con patrón flexible
+    // 🔹 5. ✅ CORREGIDO: Almacenamiento con búsqueda FLEXIBLE
+    if (almacenamiento) {
+      if (almacenamiento === "Otros") {
+        // Excluir las capacidades comunes (250, 256, 500, 512, 1000, 1024)
+        filtros.$and = [
+          { almacenamiento: { $not: { $regex: /250/i } } },
+          { almacenamiento: { $not: { $regex: /256/i } } },
+          { almacenamiento: { $not: { $regex: /500/i } } },
+          { almacenamiento: { $not: { $regex: /512/i } } },
+          { almacenamiento: { $not: { $regex: /1000/i } } },
+          { almacenamiento: { $not: { $regex: /1024/i } } }
+        ];
+      } else {
+        // Buscar el número en cualquier parte del campo almacenamiento
+        const almacNumero = almacenamiento.toString().replace(/\D/g, '');
+        if (almacNumero) {
+          filtros.almacenamiento = { $regex: new RegExp(almacNumero, 'i') };
+        }
+      }
+    }
+
+    // 🔹 6. ✅ DEJAR INTACTO: tipo_almacenamiento (ya funciona bien)
     if (tipo_almacenamiento) {
       filtros.tipo_almacenamiento = { $regex: createFlexiblePattern(tipo_almacenamiento) };
     }
 
-    // 🔹 3. Búsqueda general
+    // 🔹 7. Búsqueda general (ya funciona bien)
     if (query) {
       const flexible = createFlexiblePattern(query);
       filtros.$or = [
         { nombre_equipo: { $regex: flexible } },
         { ip: { $regex: flexible } },
         { serie: { $regex: flexible } },
-        { num_inv: { $regex: flexible } }
+        { num_inv: { $regex: flexible } },
+        { cpu: { $regex: flexible } },
+        { ram: { $regex: flexible } },
+        { almacenamiento: { $regex: flexible } },
+        { marca: { $regex: flexible } },
+        { nombre_unidad: { $regex: flexible } }
       ];
     }
 
-    // 🔹 4. Filtro por rango de fechas (equipos o reparaciones en ese rango)
+    // 🔹 8. Filtro por rango de fechas (ya funciona bien)
     if (fechaInicio || fechaFin) {
       const inicio = fechaInicio ? new Date(fechaInicio + "T00:00:00") : new Date("2000-01-01");
       const fin = fechaFin ? new Date(fechaFin + "T23:59:59.999") : new Date();
 
-      // Buscar IDs de equipos con reparaciones en ese rango
       const reparacionesIds = await Reparaciones.find({
         createdAt: { $gte: inicio, $lte: fin }
       }).distinct("id_equipo");
 
-      // Si ya había un $or, combinamos
       const existingOr = filtros.$or ? filtros.$or : [];
 
       filtros.$or = [
         ...existingOr,
-        { createdAt: { $gte: inicio, $lte: fin } }, // equipos creados en el rango
-        { id: { $in: reparacionesIds } }            // o con reparaciones en el rango
+        { createdAt: { $gte: inicio, $lte: fin } },
+        { id: { $in: reparacionesIds } }
       ];
     }
 
-    // 🔹 5. Conteo total y consulta paginada
+    // 🔹 9. DEBUG: Mostrar filtros aplicados
+    console.log('🔍 FILTROS APLICADOS:', JSON.stringify(filtros, null, 2));
+
+    // 🔹 10. Conteo total y consulta paginada
     const total = await Equipo.countDocuments(filtros);
     const equipos = await Equipo.find(filtros)
       .sort({ updatedAt: -1, createdAt: -1 })
       .skip(skip)
       .limit(limit);
+
+    // 🔹 11. DEBUG: Mostrar algunos resultados para verificar
+    console.log(`📊 RESULTADOS: ${equipos.length} de ${total} equipos`);
+    if (equipos.length > 0) {
+      console.log('🔍 EJEMPLO DE EQUIPO:');
+      console.log(`   - RAM: "${equipos[0].ram}"`);
+      console.log(`   - Almacenamiento: "${equipos[0].almacenamiento}"`);
+      console.log(`   - CPU: "${equipos[0].cpu}"`);
+      console.log(`   - Tipo Almacenamiento: "${equipos[0].tipo_almacenamiento}"`);
+    }
 
     res.json({
       total,
@@ -150,7 +184,6 @@ const buscarEquipos = async (req, res) => {
     res.status(500).json({ error: 'Error al buscar equipos' });
   }
 };
-
 
 // 🆕 Crear nuevo equipo - CORREGIDO PARA CAMPOS VACÍOS
 const crearEquipo = async (req, res) => {
