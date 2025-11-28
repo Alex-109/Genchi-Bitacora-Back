@@ -43,7 +43,7 @@ const obtenerUltimosEquipos = async (req, res) => {
 };
 
 /* =========================================================================
-   2️⃣  API: Buscar equipos con filtros FLEXIBLES
+   2️⃣  API: Buscar equipos con filtros FLEXIBLES PERO INTELIGENTES
    ========================================================================= */
 const buscarEquipos = async (req, res) => {
   
@@ -82,33 +82,36 @@ const buscarEquipos = async (req, res) => {
       filtros.cpu = { $regex: createFlexiblePattern(cpu) };
     }
 
-    // 🔹 4. ✅ CORREGIDO: RAM con búsqueda FLEXIBLE
+    // 🔹 4. ✅ CORREGIDO: RAM con búsqueda INTELIGENTE (evita 6 vs 16)
     if (ram) {
-      // El filtro viene como número (8, 16, etc.) o string ("8 GB")
-      // Buscar cualquier valor que contenga ese número, sin importar formato
       const ramNumero = ram.toString().replace(/\D/g, ''); // Extraer solo números
       if (ramNumero) {
-        filtros.ram = { $regex: new RegExp(ramNumero, 'i') };
+        // Buscar el número exacto, pero que pueda tener "GB" después
+        // Usar \b (word boundary) para que 6 no coincida con 16
+        filtros.ram = { $regex: new RegExp(`\\b${ramNumero}\\s*GB\\b`, 'i') };
       }
     }
 
-    // 🔹 5. ✅ CORREGIDO: Almacenamiento con búsqueda FLEXIBLE
+    // 🔹 5. ✅ CORREGIDO: Almacenamiento con búsqueda INTELIGENTE
     if (almacenamiento) {
       if (almacenamiento === "Otros") {
-        // Excluir las capacidades comunes (250, 256, 500, 512, 1000, 1024)
+        // Excluir las capacidades comunes
         filtros.$and = [
-          { almacenamiento: { $not: { $regex: /250/i } } },
-          { almacenamiento: { $not: { $regex: /256/i } } },
-          { almacenamiento: { $not: { $regex: /500/i } } },
-          { almacenamiento: { $not: { $regex: /512/i } } },
-          { almacenamiento: { $not: { $regex: /1000/i } } },
-          { almacenamiento: { $not: { $regex: /1024/i } } }
+          { almacenamiento: { $not: { $regex: /\b250\s*GB\b/i } } },
+          { almacenamiento: { $not: { $regex: /\b256\s*GB\b/i } } },
+          { almacenamiento: { $not: { $regex: /\b500\s*GB\b/i } } },
+          { almacenamiento: { $not: { $regex: /\b512\s*GB\b/i } } },
+          { almacenamiento: { $not: { $regex: /\b1000\s*GB\b/i } } },
+          { almacenamiento: { $not: { $regex: /\b1024\s*GB\b/i } } },
+          { almacenamiento: { $not: { $regex: /\b1\s*TB\b/i } } }
         ];
       } else {
-        // Buscar el número en cualquier parte del campo almacenamiento
         const almacNumero = almacenamiento.toString().replace(/\D/g, '');
         if (almacNumero) {
-          filtros.almacenamiento = { $regex: new RegExp(almacNumero, 'i') };
+          // Buscar el número exacto con "GB" o "TB"
+          filtros.almacenamiento = { 
+            $regex: new RegExp(`\\b${almacNumero}\\s*(GB|TB)\\b`, 'i') 
+          };
         }
       }
     }
@@ -118,20 +121,37 @@ const buscarEquipos = async (req, res) => {
       filtros.tipo_almacenamiento = { $regex: createFlexiblePattern(tipo_almacenamiento) };
     }
 
-    // 🔹 7. Búsqueda general (ya funciona bien)
+    // 🔹 7. Búsqueda general (mejorada para evitar falsos positivos)
     if (query) {
       const flexible = createFlexiblePattern(query);
-      filtros.$or = [
-        { nombre_equipo: { $regex: flexible } },
-        { ip: { $regex: flexible } },
-        { serie: { $regex: flexible } },
-        { num_inv: { $regex: flexible } },
-        { cpu: { $regex: flexible } },
-        { ram: { $regex: flexible } },
-        { almacenamiento: { $regex: flexible } },
-        { marca: { $regex: flexible } },
-        { nombre_unidad: { $regex: flexible } }
-      ];
+      // Para búsqueda general, mantener flexible pero con límites de palabra para números
+      const queryNumero = query.toString().replace(/\D/g, '');
+      if (queryNumero && queryNumero.length <= 4) { // Si es un número razonable para RAM/almacenamiento
+        filtros.$or = [
+          { nombre_equipo: { $regex: flexible } },
+          { ip: { $regex: flexible } },
+          { serie: { $regex: flexible } },
+          { num_inv: { $regex: flexible } },
+          { cpu: { $regex: flexible } },
+          { ram: { $regex: new RegExp(`\\b${queryNumero}\\s*GB\\b`, 'i') } },
+          { almacenamiento: { $regex: new RegExp(`\\b${queryNumero}\\s*(GB|TB)\\b`, 'i') } },
+          { marca: { $regex: flexible } },
+          { nombre_unidad: { $regex: flexible } }
+        ];
+      } else {
+        // Búsqueda normal para texto
+        filtros.$or = [
+          { nombre_equipo: { $regex: flexible } },
+          { ip: { $regex: flexible } },
+          { serie: { $regex: flexible } },
+          { num_inv: { $regex: flexible } },
+          { cpu: { $regex: flexible } },
+          { ram: { $regex: flexible } },
+          { almacenamiento: { $regex: flexible } },
+          { marca: { $regex: flexible } },
+          { nombre_unidad: { $regex: flexible } }
+        ];
+      }
     }
 
     // 🔹 8. Filtro por rango de fechas (ya funciona bien)

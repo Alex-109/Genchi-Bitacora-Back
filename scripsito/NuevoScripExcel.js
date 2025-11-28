@@ -191,22 +191,64 @@ function determinarTipoAlmacenamiento(row) {
   return almacenamiento.includes('SSD') ? 'SSD' : 'HDD';
 }
 
-// 🆕 FUNCIÓN PARA EXTRAER CPU/PROCESADOR
-function extraerCPU(modelo, observaciones) {
-  if (!modelo) return '';
+// 🆕 FUNCIÓN MEJORADA PARA EXTRAER CPU/PROCESADOR - BUSCA EN TODAS PARTES
+function extraerCPU(row) {
+  // Buscar en TODAS las columnas posibles
+  const textoBusqueda = (
+    (row['TIPO PC'] || '') + ' ' + 
+    (row.OBSERVACIONES || '') + ' ' +
+    (row.MODELO || '') + ' ' +
+    (row.DESCRIPCION || '') + ' ' +
+    (row.COMENTARIOS || '')
+  ).toUpperCase();
   
-  const textoBusqueda = (modelo + ' ' + (observaciones || '')).toUpperCase();
+  // DEBUG: Mostrar búsqueda de CPU (solo si hay contenido)
+  if (textoBusqueda.trim().length > 10) {
+    console.log(`🔍 Buscando CPU en: ${textoBusqueda.substring(0, 100)}...`);
+  }
   
-  if (textoBusqueda.includes('I7')) return 'Intel Core i7';
-  if (textoBusqueda.includes('I5')) return 'Intel Core i5';
-  if (textoBusqueda.includes('I3')) return 'Intel Core i3';
-  if (textoBusqueda.includes('CORE 2 DUO') || textoBusqueda.includes('CORE2DUO')) return 'Intel Core 2 Duo';
-  if (textoBusqueda.includes('CORE 2')) return 'Intel Core 2';
-  if (textoBusqueda.includes('DUAL CORE')) return 'Intel Dual Core';
-  if (textoBusqueda.includes('QUAD CORE') || textoBusqueda.includes('QUADCORE')) return 'Intel Quad Core';
+  // Patrones más completos y flexibles
+  if (textoBusqueda.includes('I7') || textoBusqueda.includes('CORE I7')) return 'Intel Core i7';
+  if (textoBusqueda.includes('I5') || textoBusqueda.includes('CORE I5')) return 'Intel Core i5'; 
+  if (textoBusqueda.includes('I3') || textoBusqueda.includes('CORE I3')) return 'Intel Core i3';
+  if (textoBusqueda.includes('CORE 2 DUO') || textoBusqueda.includes('CORE2')) return 'Intel Core 2 Duo';
+  if (textoBusqueda.includes('DUAL CORE') || textoBusqueda.includes('DUAL-CORE')) return 'Intel Dual Core';
+  if (textoBusqueda.includes('QUAD CORE') || textoBusqueda.includes('QUAD')) return 'Intel Quad Core';
   if (textoBusqueda.includes('CELERON')) return 'Intel Celeron';
   if (textoBusqueda.includes('PENTIUM')) return 'Intel Pentium';
+  if (textoBusqueda.includes('ATHLON')) return 'AMD Athlon';
+  if (textoBusqueda.includes('RYZEN')) return 'AMD Ryzen';
   if (textoBusqueda.includes('AMD')) return 'AMD';
+  
+  // Buscar modelos específicos por número
+  if (textoBusqueda.match(/I7[-\s]?\d+/)) return 'Intel Core i7';
+  if (textoBusqueda.match(/I5[-\s]?\d+/)) return 'Intel Core i5';
+  if (textoBusqueda.match(/I3[-\s]?\d+/)) return 'Intel Core i3';
+  
+  // Buscar en números de modelo específicos
+  const modelosIntel = [
+    '8100', '8300', '8400', '8500', '8600', // i5
+    '9100', '9300', '9400', '9500', '9600', // i5/i7  
+    '10100', '10400', '10600', '10700', '10900', // i5/i7/i9
+    '3470', '3570', '3770', '4570', '4670', '4770', // i5/i7
+    '6500', '6600', '6700', '7500', '7600', '7700' // i5/i7
+  ];
+  
+  for (const modelo of modelosIntel) {
+    if (textoBusqueda.includes(modelo)) {
+      if (modelo.startsWith('3') || modelo.startsWith('4') || modelo.startsWith('6') || modelo.startsWith('7')) {
+        return 'Intel Core i5/i7'; // Asignar genérico para modelos antiguos
+      }
+      return 'Intel Core i5'; // Por defecto para modelos más nuevos
+    }
+  }
+  
+  // Buscar en modelos HP comunes que suelen tener i5
+  if (textoBusqueda.includes('800 G1') || textoBusqueda.includes('800G1')) return 'Intel Core i5';
+  if (textoBusqueda.includes('8300') && !textoBusqueda.includes('HP 8300')) return 'Intel Core i5';
+  if (textoBusqueda.includes('8100') && !textoBusqueda.includes('HP 8100')) return 'Intel Core i5';
+  if (textoBusqueda.includes('6200') && !textoBusqueda.includes('HP 6200')) return 'Intel Core i5';
+  if (textoBusqueda.includes('6300') && !textoBusqueda.includes('HP 6300')) return 'Intel Core i5';
   
   return '';
 }
@@ -282,6 +324,35 @@ function generarClaveUnica(row) {
   ].join('|').hashCode();
   
   return `HASH_${componentesHash}`;
+}
+
+// 🆕 FUNCIÓN PARA ANALIZAR CUÁNTOS EQUIPOS TIENEN CPU
+async function analizarCPUs() {
+  console.log('\n🔍 ANALIZANDO DETECCIÓN DE CPUs...');
+  
+  const equiposConCPU = await Equipo.countDocuments({ cpu: { $ne: '' } });
+  const totalEquipos = await Equipo.countDocuments();
+  
+  console.log(`📊 Equipos con CPU detectado: ${equiposConCPU} de ${totalEquipos} (${((equiposConCPU/totalEquipos)*100).toFixed(1)}%)`);
+  
+  // Mostrar distribución de CPUs
+  const cpus = await Equipo.aggregate([
+    { $match: { cpu: { $ne: '' } } },
+    { $group: { _id: '$cpu', count: { $sum: 1 } } },
+    { $sort: { count: -1 } }
+  ]);
+  
+  console.log('📈 DISTRIBUCIÓN DE CPUs:');
+  cpus.forEach(cpu => {
+    console.log(`   - ${cpu._id}: ${cpu.count} equipos`);
+  });
+  
+  // Mostrar algunos ejemplos de equipos sin CPU detectado
+  const equiposSinCPU = await Equipo.find({ cpu: '' }).limit(5);
+  console.log('\n🔍 EJEMPLOS DE EQUIPOS SIN CPU DETECTADO:');
+  equiposSinCPU.forEach(equipo => {
+    console.log(`   - ${equipo.nombre_equipo}: "${equipo.modelo}"`);
+  });
 }
 
 async function importarVersionMejorada() {
@@ -406,7 +477,7 @@ async function importarVersionMejorada() {
         }
 
         // 🆕 EXTRAER CPU Y ALMACENAMIENTO MEJORADO
-        const cpu = extraerCPU(row['TIPO PC'], row.OBSERVACIONES);
+        const cpu = extraerCPU(row);
         const almacenamiento = extraerAlmacenamientoCompleto(row);
         const tipoAlmacenamiento = determinarTipoAlmacenamiento(row);
         const ram = limpiarRAM(row.MEMORIA);
@@ -473,6 +544,9 @@ async function importarVersionMejorada() {
         console.error(`❌ Error creando equipo:`, error.message);
       }
     }
+
+    // 🆕 EJECUTAR ANÁLISIS DE CPUs
+    await analizarCPUs();
 
     // REPORTE FINAL
     console.log('\n🔧 CORRECCIONES APLICADAS:', unidadesCorregidas.size);
