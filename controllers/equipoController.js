@@ -52,6 +52,9 @@ const obtenerUltimosEquipos = async (req, res) => {
      }
    ========================================================================= */
 const buscarEquipos = async (req, res) => {
+  
+  console.log('📨 BACKEND RECIBIÓ:', JSON.stringify(req.body, null, 2));
+  
   const {
     tipo_equipo,
     marca,
